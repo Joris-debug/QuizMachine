@@ -1,34 +1,38 @@
 #include "QuizApp.h"
 #include "Arduino.h"
-QuizApp::QuizApp(uint8_t rs, uint8_t enable, uint8_t d4, uint8_t d5, uint8_t d6, uint8_t d7) { 
+QuizApp::QuizApp() { 
   m_lastQuestion = 0;
   m_questionType = QuestionType::regularQuestion;
-  m_p_lcd = new LiquidCrystal(rs, enable, d4, d5, d6, d7);
+  m_p_lcd = nullptr;
+  m_p_keypad = nullptr;
   m_buzzerPin = 0;
+  m_questionCount = 0;
   memset(m_userInput,'\0', 17);
+}
 
-  const uint8_t ROWS = 4; //Four rows
-  const uint8_t COLS = 4; //Four columns
-  
-  static char hexaKeys[ROWS][COLS] = {   // Map the buttons to an array for the Keymap instance
+void QuizApp::setLCDPins(uint8_t rs, uint8_t enable, uint8_t d4, uint8_t d5, uint8_t d6, uint8_t d7) {
+  m_p_lcd = new LiquidCrystal(rs, enable, d4, d5, d6, d7);
+}
+
+void QuizApp::setKeypadPins(uint8_t row1, uint8_t row2, uint8_t row3, uint8_t row4, uint8_t col1, uint8_t col2, uint8_t col3, uint8_t col4) {
+  static char hexaKeys[4][4] = {   // Map the buttons to an array for the Keymap instance
     {'1', '2', '3', 'A'},
     {'4', '5', '6', 'B'},
     {'7', '8', '9', 'C'},
     {'*', '0', '#', 'D'}
   };
-  uint8_t static colPins[ROWS] = {5, 4, 3, 2}; // Pins used for the rows of the keypad
-  uint8_t static rowPins[COLS] = {9, 8, 7, 6}; // Pins used for the columns of the keypad
-  m_p_keypad = new Keypad(makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
-
+  uint8_t static colPins[4] = {row4, row3, row2, row1}; // Pins used for the rows of the keypad
+  uint8_t static rowPins[4] = {col4, col3, col2, col1}; // Pins used for the columns of the keypad
+  m_p_keypad = new Keypad(makeKeymap(hexaKeys), rowPins, colPins, 4, 4);
 }
 
-void QuizApp::setBuzzerPin(uint8_t buzzerPin){
+void QuizApp::setBuzzerPin(uint8_t buzzerPin) {
   m_buzzerPin = buzzerPin;
   pinMode(m_buzzerPin, OUTPUT);
   digitalWrite(m_buzzerPin, LOW);  
 }
 
-void QuizApp::showStartingScreen(){
+void QuizApp::showStartingScreen() {
   m_p_lcd->clear();
   m_p_lcd->setCursor(0, 0);
   m_p_lcd->print("Press any key");
@@ -119,6 +123,21 @@ void QuizApp::initialiseFile(){
     delay(5000);
   }
   //Serial.println("SD initialised");
+  countQuestions();
+}
+
+void QuizApp::countQuestions(){
+  m_questionFile = SD.open("question.csv");
+  if(!m_questionFile)  //Horrible failure
+    exit(0);
+  
+  m_questionCount = 0;
+  while(m_questionFile.available()){
+    if(m_questionFile.read() == '\n') //Linefeed tells me that I reached the end of a question
+      m_questionCount += 1;
+  }
+
+  m_questionFile.close();
 }
 
 bool QuizApp::displayQuestion(){
@@ -176,23 +195,27 @@ bool QuizApp::displayQuestion(){
 }
 
 char* QuizApp::readQuestionFromFile(){
-  static char question[100];
-  memset(question,'\0', 100);
-  uint8_t questionID = millis() % 17 + 1; //17 questions to choose from
-  //Serial.println(questionID);
+  static char question[100];  //This is where I am going to store the question
+  memset(question,'\0', 100); //Clearing the array
+  uint8_t questionID = millis() % m_questionCount + 1;
+
+  while(questionID == m_lastQuestion) //To make sure you dont receive the same question back to back
+    questionID = millis() % m_questionCount + 1;
+  m_lastQuestion = questionID;
+
   m_questionFile = SD.open("question.csv");
   if(!m_questionFile)  //Horrible failure
     exit(0);
 
-  uint8_t countedQuestions = 1; //I start at the first question
+  uint8_t countedQuestions = 1; //I start at the first question and count until I reach the desired question
   while(questionID > countedQuestions){
-    if(m_questionFile.read() == '\n')
+    if(m_questionFile.read() == '\n') //Linefeed tells me that I reached the end of a question
       countedQuestions += 1;
   }
   char currentIndex = 0;
-  while(true){
+  while(true){    //Copy each character belonging to the question
     char nextCharacter = m_questionFile.read();
-    if(nextCharacter == '\r')
+    if(nextCharacter == '\r') //'\r' shows me that I reached the end
       break;
     question[currentIndex] = nextCharacter;
     currentIndex += 1;

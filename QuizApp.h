@@ -33,10 +33,14 @@ class QuizApp{
     char m_userInput[17]; //16 Slots for the answer and 1 extra slot to store the current key (Like C: Confirm or B: Back)
     uint8_t m_lastQuestion; //To prevent the same question be displayed back to back
     uint8_t m_buzzerPin; //So the QuizApp knows which pin it needs to control to play sounds
+    uint8_t m_questionCount;
   public:
-    QuizApp(uint8_t rs, uint8_t enable, uint8_t d4, uint8_t d5, uint8_t d6, uint8_t d7);
+    QuizApp();
+    void setLCDPins(uint8_t rs, uint8_t enable, uint8_t d4, uint8_t d5, uint8_t d6, uint8_t d7);
+    void setKeypadPins(uint8_t row1, uint8_t row2, uint8_t row3, uint8_t row4, uint8_t col1, uint8_t col2, uint8_t col3, uint8_t col4);
     void setBuzzerPin(uint8_t buzzerPin);
     void initialiseFile();
+    void countQuestions();
     void showStartingScreen();
     inline void beginLcd(uint8_t width, uint8_t height) { m_p_lcd->begin(width, height); }
     bool displayQuestion(); //True: correct answer
